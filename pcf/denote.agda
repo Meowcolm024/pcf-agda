@@ -43,7 +43,7 @@ data _⊑_ : ∀ {A} → Value A → Value A → Set where
   → (v ⊔ w) ⊑ (v′ ⊔ w′)
 ⊔⊑⊔ d₁ d₂ = ⊑-conj-L (⊑-conj-R1 d₁) (⊑-conj-R2 d₂)
 
-⊔↦⊔-dist : ∀ {A} {v v′ w w′ : Value A}
+⊔↦⊔-dist : ∀ {A B} {v v′ : Value A} {w w′ : Value B}
   → (v ⊔ v′) ↦ (w ⊔ w′) ⊑ (v ↦ w) ⊔ (v′ ↦ w′)
 ⊔↦⊔-dist = ⊑-trans ⊑-dist (⊔⊑⊔ (⊑-fun (⊑-conj-R1 ⊑-refl) ⊑-refl)
                             (⊑-fun (⊑-conj-R2 ⊑-refl) ⊑-refl))
@@ -482,22 +482,22 @@ all-lits∈ : ∀ {u : Value `ℕ}
 all-lits∈ {⊥} f with f {⊥} refl
 ... | lit ()
 all-lits∈ {lit x} f = x , refl
-all-lits∈ {u ⊔ u'} f with all-lits∈ (λ z → f (inj₂ z))
-... | v , w = v , inj₂ w
+all-lits∈ {u ⊔ u'} f with all-lits∈ (λ z → f (inj₁ z))
+... | v , w = v , inj₁ w
 
-⨆lit : (u : Value `ℕ) → Value `ℕ
-⨆lit ⊥ = ⊥
-⨆lit (lit x) = lit x
-⨆lit (u ⊔ u') = ⨆lit u ⊔ ⨆lit u'
+-- ⨆lit : (u : Value `ℕ) → Value `ℕ
+-- ⨆lit ⊥ = ⊥
+-- ⨆lit (lit x) = lit x
+-- ⨆lit (u ⊔ u') = ⨆lit u ⊔ ⨆lit u'
 
 literal : (u u' v : Value `ℕ) → Set
-literal u u' v = all-lits u' × (u' ⊆ u) × (v ≡ ⨆lit u')
+literal u u' v = all-lits u' × (u' ⊆ u) × (v ≡ u')
 
 sub-inv-trans-literal : ∀ {u' u₂ u : Value `ℕ}
     → all-lits u'  →  u' ⊆ u
     → (∀{n} → lit n ∈ u → ∃[ u₃ ] literal u₂ u₃ (lit n))
       ---------------------------------------------------
-    → ∃[ u₃ ] literal u₂ u₃ (⨆lit u')
+    → ∃[ u₃ ] literal u₂ u₃ u'
 sub-inv-trans-literal {u' = ⊥} {u₂} {u} lu' u'⊆u IH = contradiction (lu' refl) ¬Lit⊥
 sub-inv-trans-literal {u' = lit x} {u₂} {u} lu' u'⊆u IH = IH (u'⊆u refl)
 sub-inv-trans-literal {u' = u₁' ⊔ u₂'} {u₂} {u} lg u'⊆u IH
@@ -517,10 +517,10 @@ sub-inv-trans-literal {u' = u₁' ⊔ u₂'} {u₂} {u} lg u'⊆u IH
       u₂'⊆u₂ (inj₂ y) = u₃₂⊆u₂ y
 
 sub-inv-literal : ∀ {u₁ u₂ : Value `ℕ}
-        → u₁ ⊑ u₂
-        → ∀{n} → lit n ∈ u₁
-          ------------------------------
-        → ∃[ u₃ ] literal u₂ u₃ (lit n)
+    → u₁ ⊑ u₂
+    → ∀{n} → lit n ∈ u₁
+      ------------------------------
+    → ∃[ u₃ ] literal u₂ u₃ (lit n)
 sub-inv-literal {u₁ = lit x} {u₂} ⊑-lit {n} refl = lit x , (λ {u} → lit) , (λ {u} z → z) , refl
 sub-inv-literal {u₁ = u₁ ⊔ u₃} {u₂} (⊑-conj-L lt lt₁) {n} (inj₁ x) = sub-inv-literal lt x
 sub-inv-literal {u₁ = u₁ ⊔ u₃} {u₂} (⊑-conj-L lt lt₁) {n} (inj₂ y) = sub-inv-literal lt₁ y
@@ -541,5 +541,9 @@ sub-inv-literal {u₁ = u₁} {u₂} (⊑-trans {v = u} lt lt₁) {n} m
 sub-inv-lit : ∀ {u₁ : Value `ℕ} {n}
     → (lit n) ⊑ u₁
       ----------------------------------------------------
-    → ∃[ u₂ ] all-lits u₂ × (u₂ ⊆ u₁) × (lit n ≡ ⨆lit u₂)
+    → ∃[ u₂ ] all-lits u₂ × (u₂ ⊆ u₁) × (lit n ≡ u₂)
 sub-inv-lit {u₁ = u₁} {n} abc = sub-inv-literal abc {n} refl
+
+all-lits-⊔ : ∀ {u u' : Value `ℕ} → all-lits u → all-lits u' → all-lits (u ⊔ u')
+all-lits-⊔ {u} {u'} al al' (inj₁ x) = al x
+all-lits-⊔ {u} {u'} al al' (inj₂ y) = al' y
