@@ -66,7 +66,7 @@ data _⊑_ : ∀ {A} → Value A → Value A → Set where
 ⊔⊑-invR (⊑-conj-R2 lt) = ⊑-conj-R2 (⊔⊑-invR lt)
 ⊔⊑-invR (⊑-trans lt1 lt2) = ⊑-trans (⊔⊑-invR lt1) lt2
 
-Env : Ctx → Set
+Env : Con → Set
 Env Γ = ∀ {A} → Γ ∋ A → Value A
 
 `∅ : Env ∅
@@ -173,7 +173,7 @@ data _⊢_↓_ : ∀ {Γ A} → Env Γ → Γ ⊢ A → Value A → Set where
 _iff_ : Set → Set → Set
 P iff Q = (P → Q) × (Q → P)
 
-Denotation : Ctx → Ty → Set₁
+Denotation : Con → Ty → Set₁
 Denotation Γ A = Env Γ → Value A → Set
 
 ℰ : ∀{Γ A} → (M : Γ ⊢ A) → Denotation Γ A

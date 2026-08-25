@@ -418,3 +418,97 @@ fix-cong {N = N} {N'} N≃N' =
   ≃⟨ ≃-sym fix-equiv ⟩
     ℰ (μ N')
   ☐
+
+data Ctx : Con → Ty → Con → Ty → Set where
+  ctx-hole   : ∀ {Γ A} → Ctx Γ A Γ A
+  ctx-lam    : ∀ {Γ Δ A B C} → Ctx Γ C (Δ ▷ A) B → Ctx Γ C Δ (A ⇒ B)
+  ctx-app-L  : ∀ {Γ Δ A B C} → Ctx Γ C Δ (A ⇒ B) → Δ ⊢ A → Ctx Γ C Δ B
+  ctx-app-R  : ∀ {Γ Δ A B C} → Δ ⊢ (A ⇒ B) → Ctx Γ C Δ A → Ctx Γ C Δ B
+  ctx-S      : ∀ {Γ Δ C} → Ctx Γ C Δ `ℕ → Ctx Γ C Δ `ℕ
+  ctx-case-L : ∀ {Γ Δ A C} → Ctx Γ C Δ `ℕ → Δ ⊢ A → Δ ▷ `ℕ ⊢ A → Ctx Γ C Δ A
+  ctx-case-M : ∀ {Γ Δ A C} → Δ ⊢ `ℕ → Ctx Γ C Δ A → Δ ▷ `ℕ ⊢ A → Ctx Γ C Δ A
+  ctx-case-N : ∀ {Γ Δ A C} → Δ ⊢ `ℕ → Δ ⊢ A → Ctx Γ C (Δ ▷ `ℕ) A → Ctx Γ C Δ A
+  ctx-fix    : ∀ {Γ Δ A C} → Ctx Γ C Δ (A ⇒ A) → Ctx Γ C Δ A
+
+plug : ∀ {Γ Δ A B} → Ctx Γ A Δ B → Γ ⊢ A → Δ ⊢ B
+plug ctx-hole             M = M
+plug (ctx-lam C)          M = ƛ (plug C M)
+plug (ctx-app-L C N)      M = (plug C M) · N
+plug (ctx-app-R L C)      M = L · (plug C M)
+plug (ctx-S C)            M = `S (plug C M)
+plug (ctx-case-L C N₁ N₂) M = case (plug C M) N₁ N₂
+plug (ctx-case-M L C N₂)  M = case L (plug C M) N₂
+plug (ctx-case-N L N₁ C)  M = case L N₁ (plug C M)
+plug (ctx-fix C)          M = μ (plug C M)
+
+compositionality : ∀ {Γ Δ A B} {C : Ctx Γ A Δ B} {M N : Γ ⊢ A}
+  → ℰ M ≃ ℰ N
+    ---------------------------
+  → ℰ (plug C M) ≃ ℰ (plug C N)
+compositionality {C = ctx-hole} M≃M' = M≃M'
+compositionality {C = ctx-lam C} M≃M' = lam-cong (compositionality M≃M')
+compositionality {C = ctx-app-L C x} M≃M' =
+  app-cong (compositionality M≃M') λ γ v → (λ z → z) , (λ z → z)
+compositionality {C = ctx-app-R x C} M≃M' =
+  app-cong (λ γ v → (λ z → z) , (λ z → z)) (compositionality M≃M')
+compositionality {C = ctx-S C} M≃M' = suc-cong (compositionality M≃M')
+compositionality {C = ctx-case-L C x x₁} M≃M' =
+  case-cong (compositionality M≃M') (λ γ v → (λ z → z) , (λ z → z)) λ γ v → (λ z → z) , (λ z → z)
+compositionality {C = ctx-case-M x C x₁} M≃M' =
+  case-cong (λ γ v → (λ z → z) , (λ z → z)) (compositionality M≃M') λ γ v → (λ z → z) , (λ z → z)
+compositionality {C = ctx-case-N x x₁ C} M≃M' =
+  case-cong (λ γ v → (λ z → z) , (λ z → z)) (λ γ v → (λ z → z) , (λ z → z)) (compositionality M≃M')
+compositionality {C = ctx-fix C} M≃M' = fix-cong (compositionality M≃M')
+
+⟦_⟧ : ∀ {Γ A} → (M : Γ ⊢ A) → Denotation Γ A
+⟦ ` x        ⟧ = λ γ v → v ⊑ γ x
+⟦ ƛ M        ⟧ = ℱ ⟦ M ⟧
+⟦ M · N      ⟧ = ⟦ M ⟧ ● ⟦ N ⟧
+⟦ `Z         ⟧ = 𝒵
+⟦ `S M       ⟧ = 𝒮 ⟦ M ⟧
+⟦ case L M N ⟧ = 𝒞 ⟦ L ⟧ ⟦ M ⟧ ⟦ N ⟧
+⟦ μ M        ⟧ = 𝒰 ⟦ M ⟧
+
+ℰ≃⟦⟧ : ∀ {Γ A} {M : Γ ⊢ A} → ℰ M ≃ ⟦ M ⟧
+ℰ≃⟦⟧ {M = ` x} = var-equiv
+ℰ≃⟦⟧ {M = ƛ M} =
+  start
+    ℰ (ƛ M)
+  ≃⟨ lam-equiv ⟩
+    ℱ (ℰ M)
+  ≃⟨ ℱ-cong (ℰ≃⟦⟧ {M = M}) ⟩
+    ⟦ ƛ M ⟧
+  ☐
+ℰ≃⟦⟧ {M = M · N} =
+  start
+    ℰ (M · N)
+  ≃⟨ app-equiv ⟩
+    ℰ M ● ℰ N
+  ≃⟨ ●-cong (ℰ≃⟦⟧ {M = M}) (ℰ≃⟦⟧ {M = N}) ⟩
+    ⟦ M · N ⟧
+  ☐
+ℰ≃⟦⟧ {M = `Z} = zero-equiv
+ℰ≃⟦⟧ {M = `S M} =
+  start
+    ℰ (`S M)
+  ≃⟨ suc-equiv ⟩
+    𝒮 (ℰ M)
+  ≃⟨ 𝒮-cong (ℰ≃⟦⟧ {M = M}) ⟩
+    ⟦ `S M ⟧
+  ☐
+ℰ≃⟦⟧ {M = case L M N} =
+ start
+    ℰ (case L M N)
+  ≃⟨ case-equiv ⟩
+    𝒞 (ℰ L) (ℰ M) (ℰ N)
+  ≃⟨ 𝒞-cong (ℰ≃⟦⟧ {M = L}) (ℰ≃⟦⟧ {M = M}) (ℰ≃⟦⟧ {M = N}) ⟩
+    ⟦ case L M N ⟧
+  ☐
+ℰ≃⟦⟧ {M = μ M} =
+  start
+    ℰ (μ M)
+  ≃⟨ fix-equiv ⟩
+    𝒰 (ℰ M)
+  ≃⟨ 𝒰-cong (ℰ≃⟦⟧ {M = M}) ⟩
+    ⟦ μ M ⟧
+  ☐

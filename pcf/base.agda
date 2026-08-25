@@ -26,13 +26,13 @@ data Ty : Set where
 
 infixl 5 _▷_
 
-data Ctx : Set where
-  ∅   : Ctx
-  _▷_ : Ctx → Ty → Ctx
+data Con : Set where
+  ∅   : Con
+  _▷_ : Con → Ty → Con
 
 infix  4 _∋_
 
-data _∋_ : Ctx → Ty → Set where
+data _∋_ : Con → Ty → Set where
   Z : ∀ {Γ A}           → Γ ▷ A ∋ A
   S : ∀ {Γ A B} → Γ ∋ A → Γ ▷ B ∋ A
 
@@ -42,7 +42,7 @@ infix  9 `_
 infixr 5 ƛ_ μ_
 infixl 7 _·_
 
-data _⊢_ (Γ : Ctx) : Ty → Set where
+data _⊢_ (Γ : Con) : Ty → Set where
   `_   : ∀ {A}   → Γ ∋ A                       → Γ ⊢ A
   ƛ_   : ∀ {A B} → Γ ▷ A ⊢ B                   → Γ ⊢ A ⇒ B
   _·_  : ∀ {A B} → Γ ⊢ A ⇒ B      → Γ ⊢ A      → Γ ⊢ B
@@ -51,7 +51,7 @@ data _⊢_ (Γ : Ctx) : Ty → Set where
   case : ∀ {A}   → Γ ⊢ `ℕ → Γ ⊢ A → Γ ▷ `ℕ ⊢ A → Γ ⊢ A
   μ_   : ∀ {A}   → Γ ⊢ A ⇒ A                   → Γ ⊢ A
 
-size : Ctx → ℕ
+size : Con → ℕ
 size ∅        = zero
 size (Γ ▷ A) = suc (size Γ)
 
@@ -71,7 +71,7 @@ infix 9 #_
   → Γ ⊢ lookup (toWitness n∈Γ)
 #_ n {n∈Γ} = ` count (toWitness n∈Γ)
 
-Ren : Ctx → Ctx → Set
+Ren : Con → Con → Set
 Ren Γ Δ = ∀ {A} → Γ ∋ A → Δ ∋ A
 
 lift : ∀ {Γ Δ A} → Ren Γ Δ → Ren (Γ ▷ A) (Δ ▷ A)
@@ -90,7 +90,7 @@ ren ρ (μ M)        = μ ren ρ M
 weaken : ∀ {Γ A B} → Γ ⊢ A → Γ ▷ B ⊢ A
 weaken = ren S
 
-Sub : Ctx → Ctx → Set
+Sub : Con → Con → Set
 Sub Γ Δ = ∀ {A} → Γ ∋ A → Δ ⊢ A
 
 lifts : ∀ {Γ Δ A} → Sub Γ Δ → Sub (Γ ▷ A) (Δ ▷ A)
