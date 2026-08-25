@@ -164,9 +164,10 @@ data _⊢_↓_ : ∀ {Γ A} → Env Γ → Γ ⊢ A → Value A → Set where
       ---------------------
     → γ ⊢ case L M N ↓ v
 
-  ↓-μ : ∀ {Γ A} {γ : Env Γ} {N : Γ ▷ A ⊢ A} {v}
-    → (γ `, v) ⊢ N ↓ v
-      -----------------
+  ↓-μ : ∀ {Γ A} {γ : Env Γ} {N : Γ ⊢ A ⇒ A} {u v}
+    → γ ⊢ N ↓ (u ↦ v)
+    → γ ⊢ μ N ↓ u
+      ----------------
     → γ ⊢ μ N ↓ v
 
 _iff_ : Set → Set → Set
@@ -260,8 +261,7 @@ ren-pres ρ lt (↓-case-Z d d₁) =
   ↓-case-Z (ren-pres ρ lt d) (ren-pres ρ lt d₁)
 ren-pres ρ lt (↓-case-S d d₁) =
   ↓-case-S (ren-pres ρ lt d) (ren-pres (lift ρ) (lift-⊑ ρ lt) d₁)
-ren-pres ρ lt (↓-μ d) =
-  ↓-μ (ren-pres (lift ρ) (lift-⊑ ρ lt) d)
+ren-pres ρ lt (↓-μ d d₁) = ↓-μ (ren-pres ρ lt d) (ren-pres ρ lt d₁)
 
 ⊑-env : ∀ {Γ} {γ : Env Γ} {δ : Env Γ} {A} {M : Γ ⊢ A} {v}
   → γ ⊢ M ↓ v

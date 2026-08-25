@@ -49,7 +49,7 @@ data _⊢_ (Γ : Ctx) : Ty → Set where
   `Z   :                                         Γ ⊢ `ℕ
   `S   :           Γ ⊢ `ℕ                      → Γ ⊢ `ℕ 
   case : ∀ {A}   → Γ ⊢ `ℕ → Γ ⊢ A → Γ ▷ `ℕ ⊢ A → Γ ⊢ A
-  μ_   : ∀ {A}   → Γ ▷ A ⊢ A                   → Γ ⊢ A
+  μ_   : ∀ {A}   → Γ ⊢ A ⇒ A                   → Γ ⊢ A
 
 size : Ctx → ℕ
 size ∅        = zero
@@ -85,7 +85,7 @@ ren ρ (M · N)      = (ren ρ M) · (ren ρ N)
 ren ρ `Z           = `Z
 ren ρ (`S M)       = `S (ren ρ M)
 ren ρ (case L M N) = case (ren ρ L) (ren ρ M) (ren (lift ρ) N)
-ren ρ (μ M)        = μ ren (lift ρ) M
+ren ρ (μ M)        = μ ren ρ M
 
 weaken : ∀ {Γ A B} → Γ ⊢ A → Γ ▷ B ⊢ A
 weaken = ren S
@@ -104,7 +104,7 @@ sub σ (M · N)      = (sub σ M) · (sub σ N)
 sub σ `Z           = `Z
 sub σ (`S M)       = `S (sub σ M)
 sub σ (case L M N) = case (sub σ L) (sub σ M) (sub (lifts σ) N)
-sub σ (μ M)        = μ sub (lifts σ) M
+sub σ (μ M)        = μ sub σ M
 
 infixr 6 _•_
 
@@ -164,9 +164,14 @@ data _—→_ : ∀ {Γ A} → (Γ ⊢ A) → (Γ ⊢ A) → Set where
       ---------------------------
     → case (`S L) M N —→ N [ L ]
 
+  ξ-μ : ∀ {Γ A} {M M' : Γ ⊢ A ⇒ A}
+    → M —→ M'
+      ----------------
+    → (μ M) —→ (μ M')
+
   β-μ : ∀ {Γ A} {M : Γ ▷ A ⊢ A}
-      -------------------
-    → (μ M) —→ M [ μ M ]
+      ---------------------------
+    → (μ (ƛ M)) —→ M [ μ (ƛ M) ] 
 
 progress : ∀ {A} → (M : ∅ ⊢ A) → ∃[ N ] (M —→ N) ⊎ Val M
 progress (ƛ M)               = inj₂ (V-ƛ M)
@@ -174,7 +179,7 @@ progress (M · N) with progress M
 ... | inj₁ (M' , M—→M')      = inj₁ (M' · N , ξ-·ₗ M—→M')
 ... | inj₂ (V-ƛ M') with progress N
 ... | inj₁ (N' , N—→N')      = inj₁ ((ƛ M') · N' , ξ-·ᵣ N—→N')
-... | inj₂ VN                = inj₁ ((M' [ N ]) , β-· VN)
+... | inj₂ VN                = inj₁ (M' [ N ] , β-· VN)
 progress `Z                  = inj₂ V-Z
 progress (`S M) with progress M
 ... | inj₁ (M' , M—→M')      = inj₁ (`S M' , ξ-S M—→M')
@@ -182,8 +187,10 @@ progress (`S M) with progress M
 progress (case L M N) with progress L
 ... | inj₁ (L' , L—→L')      = inj₁ (case L' M N , ξ-case L—→L')
 ... | inj₂ V-Z               = inj₁ (M , β-case-Z)
-... | inj₂ (V-S {M = L'} VL) = inj₁ ((N [ L' ]) , β-case-S VL)
-progress (μ M)               = inj₁ ((M [ μ M ]) , β-μ)
+... | inj₂ (V-S {M = L'} VL) = inj₁ (N [ L' ] , β-case-S VL)
+progress (μ M) with progress M
+... | inj₁ (M' , M—→M')      = inj₁ (μ M' , ξ-μ M—→M')
+... | inj₂ (V-ƛ N)           = inj₁ ((N [ μ ƛ N ]) , β-μ)
 
 infix  2 _—↠_
 
