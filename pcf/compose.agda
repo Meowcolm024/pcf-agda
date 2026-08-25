@@ -171,6 +171,12 @@ sub-𝒮 d (⊑-trans lt lt₁)  = sub-𝒮 (sub-𝒮 d lt₁) lt
 𝒮ℰ→ℰS {v = lit (suc x)} d = ↓-S d
 𝒮ℰ→ℰS {v = v ⊔ v₁}      d = ↓-⊔-intro (𝒮ℰ→ℰS (d .proj₁)) (𝒮ℰ→ℰS (d .proj₂))
 
+suc-inversion : ∀ {Γ} {γ : Env Γ} {N : Γ ⊢ `ℕ} {n}
+  → γ ⊢ `S N ↓ lit (suc n)
+    -----------------------
+  → γ ⊢ N ↓ lit n
+suc-inversion d = ℰS→𝒮ℰ d
+
 suc-equiv : ∀ {Γ} {N : Γ ⊢ `ℕ} → ℰ (`S N) ≃ 𝒮 (ℰ N)
 suc-equiv γ v = ℰS→𝒮ℰ , 𝒮ℰ→ℰS
 
