@@ -186,11 +186,11 @@ diff-const-env {x = x} {y} neq with x var≟ y
 ... | yes (refl , eq) = contradiction x λ z → neq eq
 ... | no _            = refl
 
-subst-reflect-var : ∀ {Γ Δ} {γ : Env Δ} {A} {x : Γ ∋ A} {v} {σ : Sub Γ Δ}
+sub-reflect-var : ∀ {Γ Δ} {γ : Env Δ} {A} {x : Γ ∋ A} {v} {σ : Sub Γ Δ}
   → γ ⊢ σ x ↓ v
     -------------------------------------------
   → Σ[ δ ∈ Env Γ ] (γ `⊢ σ ↓ δ) × (δ ⊢ ` x ↓ v)
-subst-reflect-var {Γ} {Δ} {γ} {A} {x} {v} {σ} xv
+sub-reflect-var {Γ} {Δ} {γ} {A} {x} {v} {σ} xv
   rewrite Eq.sym (same-const-env {Γ} {x = x} {v}) =
     (const-env x v , const-env-ok , ↓-var)
   where
@@ -199,17 +199,17 @@ subst-reflect-var {Γ} {Δ} {γ} {A} {x} {v} {σ} xv
   ... | yes (refl , x≡y) rewrite Eq.sym x≡y | same-const-env {Γ} {x = x} {v} = xv
   ... | no x≢y = ↓-⊥-intro
 
-subst-⊥ : ∀{Γ Δ} {γ : Env Δ} {σ : Sub Γ Δ}
+sub-⊥ : ∀{Γ Δ} {γ : Env Δ} {σ : Sub Γ Δ}
     -----------------
   → γ `⊢ σ ↓ `⊥
-subst-⊥ x = ↓-⊥-intro
+sub-⊥ x = ↓-⊥-intro
 
-subst-⊔ : ∀ {Γ Δ} {γ : Env Δ} {γ₁ γ₂ : Env Γ} {σ : Sub Γ Δ}
-        → γ `⊢ σ ↓ γ₁
-        → γ `⊢ σ ↓ γ₂
-          -------------------------
-        → γ `⊢ σ ↓ (γ₁ `⊔ γ₂)
-subst-⊔ γ₁-ok γ₂-ok x = ↓-⊔-intro (γ₁-ok x) (γ₂-ok x)
+sub-⊔ : ∀ {Γ Δ} {γ : Env Δ} {γ₁ γ₂ : Env Γ} {σ : Sub Γ Δ}
+      → γ `⊢ σ ↓ γ₁
+      → γ `⊢ σ ↓ γ₂
+        -------------------------
+      → γ `⊢ σ ↓ (γ₁ `⊔ γ₂)
+sub-⊔ γ₁-ok γ₂-ok x = ↓-⊔-intro (γ₁-ok x) (γ₂-ok x)
 
 lambda-inj : ∀ {Γ A B} {M N : Γ ▷ A ⊢ B}
   → (ƛ M) ≡ (ƛ N)
@@ -243,3 +243,151 @@ postulate
     --------------------------
   → (init δ `, last δ) ⊢ M ↓ v
 -- split {δ = δ} {M} {v} δMv = Eq.subst (λ γ → γ ⊢ M ↓ v) (init-last δ) δMv
+
+sub-reflect : ∀ {Γ Δ} {δ : Env Δ} {A} {M : Γ ⊢ A} {v} {L : Δ ⊢ A} {σ : Sub Γ Δ}
+  → δ ⊢ L ↓ v
+  → sub σ M ≡ L
+    ------------------------------------------
+  → Σ[ γ ∈ Env Γ ] (δ `⊢ σ ↓ γ) × (γ ⊢ M ↓ v)
+
+sub-reflect {δ = δ} {M = M} {v = v} {σ = σ} ↓-var eq
+    with M 
+... | ` x = sub-reflect-var (Eq.subst (λ z → δ ⊢ z ↓ v) (Eq.sym eq) ↓-var) 
+sub-reflect {δ = δ} {M = M} {σ = σ} (↓-var {x = _}) () | ƛ M'
+sub-reflect {δ = δ} {M = M} {σ = σ} (↓-var {x = _}) () | M' · M''
+sub-reflect {δ = δ} {M = M} {σ = σ} (↓-var {x = _}) () | `Z
+sub-reflect {δ = δ} {M = M} {σ = σ} (↓-var {x = _}) () | `S M'
+sub-reflect {δ = δ} {M = M} {σ = σ} (↓-var {x = _}) () | case M' M'' M'''
+sub-reflect {δ = δ} {M = M} {σ = σ} (↓-var {x = _}) () | μ M'
+
+sub-reflect {δ = δ} {M = M} {v = v} {σ = σ} (↓-↦-elim d₁ d₂) eq
+    with M
+... | ` x = sub-reflect-var (Eq.subst (λ z → δ ⊢ z ↓ v) (Eq.sym eq) (↓-↦-elim d₁ d₂))
+... | M₁ · M₂
+    with refl ← eq
+    with sub-reflect {M = M₁} d₁ refl | sub-reflect {M = M₂} d₂ refl
+... | (δ₁ , sd1 , m1) | (δ₂ , sd2 , m2)
+    = (δ₁ `⊔ δ₂) , sub-⊔ sd1 sd2
+    , ↓-↦-elim (⊑-env m1 (⊑-env-conj-R1 δ₁ δ₂)) (⊑-env m2 (⊑-env-conj-R2 δ₁ δ₂))
+
+sub-reflect {δ = δ} {M = M} {v = v} {σ = σ} (↓-↦-intro d) eq
+  with M
+... | ` x = sub-reflect-var (Eq.subst (λ z → δ ⊢ z ↓ v) (Eq.sym eq) (↓-↦-intro d))
+... | ƛ M'
+    with sub-reflect {M = M'} {σ = lifts σ} d (lambda-inj eq)
+... | (δ' , sd' , m')
+    = init δ' , (λ x → ren-inc-reflect (sd' (S x)))
+    , ↓-↦-intro (up-env (split m') (var-inv (sd' Z)))
+
+sub-reflect {M = M} {σ = σ} ↓-⊥-intro eq = `⊥ , sub-⊥ {σ = σ} , ↓-⊥-intro
+
+sub-reflect {M = M} {σ = σ} (↓-⊔-intro d₁ d₂) eq
+    with sub-reflect {M = M} {σ = σ} d₁ eq | sub-reflect {M = M} {σ = σ} d₂ eq
+... | (δ₁ , sd1 , m1) | (δ₂ , sd2 , m2)
+    = (δ₁ `⊔ δ₂ , sub-⊔ sd1 sd2
+    , ↓-⊔-intro (⊑-env m1 (⊑-env-conj-R1 δ₁ δ₂)) (⊑-env m2 (⊑-env-conj-R2 δ₁ δ₂)))
+
+sub-reflect {M = M} {σ = σ} (↓-sub d x) eq
+    with sub-reflect {M = M} {σ = σ} d eq
+... | (δ' , sd' , m') = δ' , sd' , ↓-sub m' x
+
+sub-reflect {δ = δ} {M = M} {v = v} {σ = σ} ↓-Z eq
+    with M
+... | ` x = sub-reflect-var (Eq.subst (λ z → δ ⊢ z ↓ v) (Eq.sym eq) ↓-Z)
+... | `Z =  `⊥ , sub-⊥ {σ = σ} , ↓-Z
+
+sub-reflect {δ = δ} {M = M} {v = v} {σ = σ} (↓-S d) eq
+    with M
+... | ` x = sub-reflect-var (Eq.subst (λ z → δ ⊢ z ↓ v) (Eq.sym eq) (↓-S d))
+... | `S M'
+    with sub-reflect {M = M'} {σ = σ} d (suc-inj eq)
+... | (δ' , sd' , m') = δ' , sd' , ↓-S m'
+
+sub-reflect {δ = δ} {M = M} {v = v} {σ = σ} (↓-case-Z d₁ d₂) eq
+    with M
+... | ` x = sub-reflect-var (Eq.subst (λ z → δ ⊢ z ↓ v) (Eq.sym eq) (↓-case-Z d₁ d₂))
+... | case M₁ M₂ M₃
+    with (eq1 , eq2 , eq3) ← case-inj eq
+    with (δ₁ , sd1 , m1) ← sub-reflect {M = M₁} {σ = σ} d₁ eq1
+    with (δ₂ , sd2 , m2) ← sub-reflect {M = M₂} {σ = σ} d₂ eq2 
+    = (δ₁ `⊔ δ₂) , sub-⊔ sd1 sd2
+    , ↓-case-Z (⊑-env m1 (⊑-env-conj-R1 δ₁ δ₂)) (⊑-env m2 (⊑-env-conj-R2 δ₁ δ₂))
+
+sub-reflect {δ = δ} {M = M} {v = v} {σ = σ} (↓-case-S d₁ d₂) eq
+    with M
+... | ` x = sub-reflect-var (Eq.subst (λ z → δ ⊢ z ↓ v) (Eq.sym eq) (↓-case-S d₁ d₂))
+... | case M₁ M₂ M₃
+    with (eq1 , eq2 , eq3) ← case-inj eq
+    with (δ₁ , sd1 , m1) ← sub-reflect {M = M₁} {σ = σ} d₁ eq1
+    with (δ₂ , sd2 , m2) ← sub-reflect {M = M₃} {σ = lifts σ} d₂ eq3
+    = (δ₁ `⊔ init δ₂) , sub-⊔ sd1 (λ x → ren-inc-reflect (sd2 (S x)))
+    , ↓-case-S (⊑-env m1 (⊑-env-conj-R1 δ₁ (init δ₂)))
+               (⊑-env (split m2) λ { Z → var-inv (sd2 Z) ; (S x) → ⊑-env-conj-R2 δ₁ (init δ₂) x })
+
+sub-reflect {δ = δ} {M = M} {v = v} {σ = σ} (↓-μ d₁ d₂) eq
+    with M
+... | ` x = sub-reflect-var (Eq.subst (λ z → δ ⊢ z ↓ v) (Eq.sym eq) (↓-μ d₁ d₂))
+... | μ M' with refl ← eq
+    with (δ₁ , sd1 , m1) ← sub-reflect {M = M'} {σ = σ} d₁ refl
+    with (δ₂ , sd2 , m2) ← sub-reflect {M = μ M'} {σ = σ} d₂ refl
+    = (δ₁ `⊔ δ₂) , sub-⊔ sd1 sd2
+    , (↓-μ (⊑-env m1 (⊑-env-conj-R1 δ₁ δ₂)) (⊑-env m2 (⊑-env-conj-R2 δ₁ δ₂)))
+
+sub-zero-reflect : ∀ {Δ} {δ : Env Δ} {A} {γ : Env (Δ ▷ A)} {M : Δ ⊢ A}
+  → δ `⊢ sub-zero M ↓ γ
+    --------------------------------------------
+  → Σ[ w ∈ Value _ ] γ `⊑ (δ `, w) × δ ⊢ M ↓ w
+sub-zero-reflect {δ = δ} {γ = γ} δσγ = (last γ , lemma , δσγ Z)
+  where
+  lemma : γ `⊑ (δ `, last γ)
+  lemma Z  =  ⊑-refl
+  lemma (S x) = var-inv (δσγ (S x))
+
+substitution-reflect : ∀ {Δ} {δ : Env Δ} {A B} {N : Δ ▷ A ⊢ B} {M : Δ ⊢ A} {v}
+  → δ ⊢ N [ M ] ↓ v
+    ------------------------------------------------
+  → Σ[ w ∈ Value _ ] δ ⊢ M ↓ w  ×  (δ `, w) ⊢ N ↓ v
+substitution-reflect d
+  with (γ , δσγ , γNv) ← sub-reflect d refl
+  with (w , ineq , δMw) ← sub-zero-reflect δσγ
+  = (w , δMw , ⊑-env γNv ineq)
+
+reflect-beta : ∀ {Γ} {γ : Env Γ} {A B} {N : Γ ▷ A ⊢ B} {M v}
+    → γ ⊢ (N [ M ]) ↓ v
+    → γ ⊢ (ƛ N) · M ↓ v
+reflect-beta d
+  with (v₂' , d₁' , d₂') ← substitution-reflect d
+  = ↓-↦-elim (↓-↦-intro d₂') d₁'
+
+-- TODO we also need similar reflect lemmas for case and fix
+
+reflect : ∀ {Γ} {γ : Env Γ} {A} {M M' N : Γ ⊢ A} {v}
+  → γ ⊢ N ↓ v  →  M —→ M'  →   M' ≡ N
+    ---------------------------------
+  → γ ⊢ M ↓ v
+reflect {γ = γ} (↓-var {x = x}) (β-· v) eq
+  = reflect-beta (Eq.subst (λ M → γ ⊢ M ↓ γ x) (Eq.sym eq) ↓-var)
+reflect ↓-var β-case-Z refl = ↓-case-Z ↓-Z ↓-var
+reflect ↓-var (β-case-S v) eq = {!!}
+reflect ↓-var β-μ eq = {!!}
+
+reflect (↓-↦-elim d₁ d₂) r eq = {!!}
+
+reflect (↓-↦-intro d) r eq = {!!}
+
+reflect ↓-⊥-intro r eq = ↓-⊥-intro
+
+reflect (↓-⊔-intro d₁ d₂) r eq
+  = ↓-⊔-intro (reflect d₁ r eq) (reflect d₂ r eq)
+
+reflect (↓-sub d lt) r eq = ↓-sub (reflect d r eq) lt
+
+reflect ↓-Z r eq = {!!}
+
+reflect (↓-S d) r eq = {!!}
+
+reflect (↓-case-Z d₁ d₂) r eq = {!!}
+
+reflect (↓-case-S d₁ d₂) r eq = {!!}
+
+reflect (↓-μ d₁ d₂) r eq = {!!}

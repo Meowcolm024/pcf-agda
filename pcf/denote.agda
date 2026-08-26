@@ -108,7 +108,7 @@ _`⊔_ : ∀ {Γ} → Env Γ → Env Γ → Env Γ
 ⊑-env-conj-R2 : ∀ {Γ} → (γ : Env Γ) → (δ : Env Γ) → δ `⊑ (γ `⊔ δ)
 ⊑-env-conj-R2 γ δ x = ⊑-conj-R2 ⊑-refl
 
-infix  2 _⊢_↓_
+infix  3 _⊢_↓_
 
 data _⊢_↓_ : ∀ {Γ A} → Env Γ → Γ ⊢ A → Value A → Set where
 
