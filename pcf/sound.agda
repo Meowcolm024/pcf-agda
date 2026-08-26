@@ -237,6 +237,8 @@ fix-inj refl = refl
 
 -- i'm not sure what happens here
 -- this should be straightforward Eq.subst with init-last
+-- but it seems that there is a weird unification/elaboration
+-- problem related to implicit parameters (or something similar)
 postulate
  split : ∀ {Γ A B} {δ : Env (Γ ▷ A)} {M : Γ ▷ A ⊢ B} {v}
   → δ ⊢ M ↓ v
@@ -340,7 +342,7 @@ sub-zero-reflect : ∀ {Δ} {δ : Env Δ} {A} {γ : Env (Δ ▷ A)} {M : Δ ⊢ 
 sub-zero-reflect {δ = δ} {γ = γ} δσγ = (last γ , lemma , δσγ Z)
   where
   lemma : γ `⊑ (δ `, last γ)
-  lemma Z  =  ⊑-refl
+  lemma Z     =  ⊑-refl
   lemma (S x) = var-inv (δσγ (S x))
 
 substitution-reflect : ∀ {Δ} {δ : Env Δ} {A B} {N : Δ ▷ A ⊢ B} {M : Δ ⊢ A} {v}
@@ -352,42 +354,131 @@ substitution-reflect d
   with (w , ineq , δMw) ← sub-zero-reflect δσγ
   = (w , δMw , ⊑-env γNv ineq)
 
-reflect-beta : ∀ {Γ} {γ : Env Γ} {A B} {N : Γ ▷ A ⊢ B} {M v}
+reflect-app : ∀ {Γ} {γ : Env Γ} {A B} {N : Γ ▷ A ⊢ B} {M v}
     → γ ⊢ (N [ M ]) ↓ v
     → γ ⊢ (ƛ N) · M ↓ v
-reflect-beta d
+reflect-app d
   with (v₂' , d₁' , d₂') ← substitution-reflect d
   = ↓-↦-elim (↓-↦-intro d₂') d₁'
 
--- TODO we also need similar reflect lemmas for case and fix
+val-num : ∀ {Γ} {L : Γ ⊢ `ℕ} → Val L → ℕ
+val-num V-Z       = zero
+val-num (V-S val) = suc (val-num val)
+ 
+val-num-↓ : ∀ {Γ} {γ : Env Γ} {L : Γ ⊢ `ℕ}
+  → (val : Val L) → γ ⊢ L ↓ lit (val-num val)
+val-num-↓ V-Z       = ↓-Z
+val-num-↓ (V-S val) = ↓-S (val-num-↓ val)
+ 
+𝒮-inv : ∀ {Γ} {γ : Env Γ} {M : Γ ⊢ `ℕ} {n w}
+  → (∀ {w'} → γ ⊢ M ↓ w' → w' ⊑ lit n)
+  → 𝒮 (ℰ M) γ w
+  → w ⊑ lit (suc n)
+𝒮-inv {w = ⊥}           ih s         = ⊑-bot
+𝒮-inv {w = lit zero}    ih s         = ⊥-elim s
+𝒮-inv {w = lit (suc x)} ih s         with refl ← lit⊑lit-inv (ih s) = ⊑-refl
+𝒮-inv {w = w₁ ⊔ w₂}     ih (s₁ , s₂) = ⊑-conj-L (𝒮-inv ih s₁) (𝒮-inv ih s₂)
+ 
+val-num-inv : ∀ {Γ} {γ : Env Γ} {L : Γ ⊢ `ℕ} {w}
+  → (val : Val L) → γ ⊢ L ↓ w → w ⊑ lit (val-num val)
+val-num-inv V-Z       d = ℰ→𝒵 d
+val-num-inv (V-S val) d = 𝒮-inv (val-num-inv val) (ℰS→𝒮ℰ d)
+
+reflect-case : ∀ {Γ} {γ : Env Γ} {A} {N : Γ ▷ `ℕ ⊢ A} {L M v}
+    → Val L
+    → γ ⊢ (N [ L ]) ↓ v
+    → γ ⊢ case (`S L) M N ↓ v
+reflect-case {N = N} {L} {M} val d
+  with (v₂' , d₁' , d₂') ← substitution-reflect {N = N} {M = L} d
+  = ↓-case-S (↓-S (val-num-↓ val)) (up-env d₂' (val-num-inv val d₁'))
+
+reflect-fix : ∀ {Γ} {γ : Env Γ} {A} {M : Γ ▷ A ⊢ A} {v}
+    → γ ⊢ (M [ μ ƛ M ]) ↓ v
+    → γ ⊢ (μ ƛ M) ↓ v
+reflect-fix d
+  with (v' , d₁' , d₂') ← substitution-reflect d
+  = ↓-μ (↓-↦-intro d₂') d₁'
 
 reflect : ∀ {Γ} {γ : Env Γ} {A} {M M' N : Γ ⊢ A} {v}
   → γ ⊢ N ↓ v  →  M —→ M'  →   M' ≡ N
     ---------------------------------
   → γ ⊢ M ↓ v
 reflect {γ = γ} (↓-var {x = x}) (β-· v) eq
-  = reflect-beta (Eq.subst (λ M → γ ⊢ M ↓ γ x) (Eq.sym eq) ↓-var)
+  = reflect-app (Eq.subst (λ M → γ ⊢ M ↓ γ x) (Eq.sym eq) ↓-var)
 reflect ↓-var β-case-Z refl = ↓-case-Z ↓-Z ↓-var
-reflect ↓-var (β-case-S v) eq = {!!}
-reflect ↓-var β-μ eq = {!!}
+reflect {γ = γ} (↓-var {x = x}) (β-case-S {L = L} {N = N} v) eq
+  = reflect-case v (Eq.subst (λ M → γ ⊢ M ↓ γ x) (Eq.sym eq) ↓-var)
+reflect {γ = γ} (↓-var {x = x}) (β-μ {M = M}) eq
+  = reflect-fix (Eq.subst (λ M → γ ⊢ M ↓ γ x) (Eq.sym eq) ↓-var)
 
-reflect (↓-↦-elim d₁ d₂) r eq = {!!}
+reflect (↓-↦-elim d₁ d₂) (ξ-·ₗ r) refl = ↓-↦-elim (reflect d₁ r refl) d₂
+reflect (↓-↦-elim d₁ d₂) (ξ-·ᵣ r) refl = ↓-↦-elim d₁ (reflect d₂ r refl)
+reflect (↓-↦-elim d₁ d₂) (β-· v) eq
+  = reflect-app (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-↦-elim d₁ d₂))
+reflect (↓-↦-elim d₁ d₂) β-case-Z refl = ↓-case-Z ↓-Z (↓-↦-elim d₁ d₂)
+reflect (↓-↦-elim d₁ d₂) (β-case-S v) eq
+  = reflect-case v (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-↦-elim d₁ d₂))
+reflect (↓-↦-elim d₁ d₂) β-μ eq
+  = reflect-fix (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-↦-elim d₁ d₂))
 
-reflect (↓-↦-intro d) r eq = {!!}
+reflect (↓-↦-intro d) (β-· x) eq
+  = reflect-app (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-↦-intro d))
+reflect (↓-↦-intro d) β-case-Z refl = ↓-case-Z ↓-Z (↓-↦-intro d)
+reflect (↓-↦-intro d) (β-case-S v) eq
+  = reflect-case v (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-↦-intro d))
+reflect (↓-↦-intro d) β-μ eq
+  = reflect-fix (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-↦-intro d))
 
 reflect ↓-⊥-intro r eq = ↓-⊥-intro
 
-reflect (↓-⊔-intro d₁ d₂) r eq
-  = ↓-⊔-intro (reflect d₁ r eq) (reflect d₂ r eq)
+reflect (↓-⊔-intro d₁ d₂) r eq = ↓-⊔-intro (reflect d₁ r eq) (reflect d₂ r eq)
 
 reflect (↓-sub d lt) r eq = ↓-sub (reflect d r eq) lt
 
-reflect ↓-Z r eq = {!!}
+reflect ↓-Z (β-· x) eq = reflect-app (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) ↓-Z)
+reflect ↓-Z β-case-Z refl = ↓-case-Z ↓-Z ↓-Z
+reflect ↓-Z (β-case-S v) eq
+  = reflect-case v (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) ↓-Z)
+reflect ↓-Z β-μ eq = reflect-fix (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) ↓-Z)
 
-reflect (↓-S d) r eq = {!!}
+reflect (↓-S d) (β-· x) eq
+  = reflect-app (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-S d))
+reflect (↓-S d) (ξ-S r) refl = ↓-S (reflect d r refl)
+reflect (↓-S d) β-case-Z refl = ↓-case-Z ↓-Z (↓-S d)
+reflect (↓-S d) (β-case-S v) eq
+ = reflect-case v (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-S d))
+reflect (↓-S d) β-μ eq
+  = reflect-fix (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-S d))
 
-reflect (↓-case-Z d₁ d₂) r eq = {!!}
+reflect (↓-case-Z d₁ d₂) (β-· x) eq
+  = reflect-app (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-case-Z d₁ d₂))
+reflect (↓-case-Z d₁ d₂) (ξ-case r) refl = ↓-case-Z (reflect d₁ r refl) d₂
+reflect (↓-case-Z d₁ d₂) β-case-Z refl = ↓-case-Z ↓-Z (↓-case-Z d₁ d₂)
+reflect (↓-case-Z d₁ d₂) (β-case-S v) eq
+  = reflect-case v (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-case-Z d₁ d₂))
+reflect (↓-case-Z d₁ d₂) β-μ eq
+  = reflect-fix (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-case-Z d₁ d₂))
 
-reflect (↓-case-S d₁ d₂) r eq = {!!}
+reflect (↓-case-S d₁ d₂) (β-· x) eq
+  = reflect-app (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-case-S d₁ d₂))
+reflect (↓-case-S d₁ d₂) (ξ-case r) refl = ↓-case-S (reflect d₁ r refl) d₂
+reflect (↓-case-S d₁ d₂) β-case-Z refl = ↓-case-Z ↓-Z (↓-case-S d₁ d₂)
+reflect (↓-case-S d₁ d₂) (β-case-S v) eq
+  = reflect-case v (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-case-S d₁ d₂))
+reflect (↓-case-S d₁ d₂) β-μ eq
+  = reflect-fix (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-case-S d₁ d₂))
 
-reflect (↓-μ d₁ d₂) r eq = {!!}
+reflect (↓-μ d₁ d₂) (β-· x) eq
+  = reflect-app (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-μ d₁ d₂))
+reflect (↓-μ d₁ d₂) β-case-Z refl = ↓-case-Z ↓-Z (↓-μ d₁ d₂)
+reflect (↓-μ d₁ d₂) (β-case-S v) eq
+  = reflect-case v (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-μ d₁ d₂))
+reflect (↓-μ d₁ d₂) (ξ-μ r) refl = ↓-μ (reflect d₁ r refl) (reflect d₂ (ξ-μ r) refl)
+reflect (↓-μ d₁ d₂) β-μ eq
+  = reflect-fix (Eq.subst (λ M → _ ⊢ M ↓ _) (Eq.sym eq) (↓-μ d₁ d₂))
+
+reduce-equal : ∀ {Γ A} {M : Γ ⊢ A} {N : Γ ⊢ A}
+  → M —→ N
+    ---------
+  → ℰ M ≃ ℰ N
+reduce-equal r γ v = ((λ m → preserve m r) , (λ n → reflect n r refl))
